@@ -1,0 +1,10 @@
+{
+  "name": "Remix: Remix: BioEntregas",
+  "description": "Sistema minimalista de controle interno de entregas e logística para motoristas e administradores.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

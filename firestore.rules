@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES ---
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      // Mandate email verification for all writes
+      return isSignedIn();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@bioentregas.com' || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN')
+      );
+    }
+
+    function isAssignedDriver(deliveryData) {
+      return isSignedIn() && (
+        deliveryData.assignedDriver == request.auth.token.email || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         deliveryData.assignedDriver == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name)
+      );
+    }
+
+    // --- ENTITY SCHEMA VALIDATIONS (Anti-Update-Gap) ---
+
+    function isValidGPSLocation(loc) {
+      return loc == null || (
+        loc.latitude is float || loc.latitude is int
+      ) && (
+        loc.longitude is float || loc.longitude is int
+      ) && (
+        loc.get('accuracy', null) == null || loc.accuracy is float || loc.accuracy is int
+      );
+    }
+
+    function isValidOccurrences(list) {
+      return list is list && list.size() <= 30; // Strictly bounded list
+    }
+
+    function isValidDelivery(data) {
+      return data.invoiceNumber is string && data.invoiceNumber.size() >= 1 && data.invoiceNumber.size() <= 50 &&
+             data.volumes is int && data.volumes >= 1 && data.volumes <= 5000 &&
+             data.clientName is string && data.clientName.size() >= 1 && data.clientName.size() <= 200 &&
+             data.address is string && data.address.size() >= 5 && data.address.size() <= 500 &&
+             data.status in ['PENDENTE', 'EM_ROTA', 'ENTREGUE', 'PROBLEMA'] &&
+             (data.get('observations', null) == null || (data.observations is string && data.observations.size() <= 2000)) &&
+             (data.get('assignedDriver', null) == null || (data.assignedDriver is string && data.assignedDriver.size() <= 150)) &&
+             (data.get('receiverName', null) == null || (data.receiverName is string && data.receiverName.size() <= 150)) &&
+             (data.get('photo', null) == null || (data.photo is string && data.photo.size() <= 1000000)) && // Max 1MB Base64 inline mock img
+             isValidGPSLocation(data.get('gpsLocation', null)) &&
+             isValidOccurrences(data.get('occurrences', []));
+    }
+
+    function isValidUserProfile(profile) {
+      return profile.uid == request.auth.uid &&
+             profile.name is string && profile.name.size() >= 2 && profile.name.size() <= 150 &&
+             profile.email is string && profile.email.size() >= 5 && profile.email.size() <= 150 &&
+             profile.role in ['ADMIN', 'DRIVER'];
+    }
+
+    // --- COLLECTION MATCHES ---
+
+    // 1. User profiles collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow list: if isAdmin(); // Avoid PII lists leaks
+      
+      allow create: if isEmailVerified() && userId == request.auth.uid && isValidUserProfile(request.resource.data) && (
+        // Prevent Self-Assigned Privileges
+        request.resource.data.role == 'DRIVER' || 
+        (request.resource.data.role == 'ADMIN' && request.auth.token.email == 'admin@bioentregas.com')
+      );
+      
+      allow update: if isEmailVerified() && userId == request.auth.uid && isValidUserProfile(request.resource.data) && (
+        isAdmin() || (
+          // Driver cannot self-promote to Admin
+          request.resource.data.role == resource.data.role &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // 2. Deliveries collection
+    match /deliveries/{deliveryId} {
+      // Path Variable Hardening (ID poisoning guard) on single document lookups
+      allow get: if isSignedIn() && isValidId(deliveryId) && (isAdmin() || isAssignedDriver(resource.data));
+      allow list: if isSignedIn() && (isAdmin() || resource.data.assignedDriver == request.auth.token.email || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && resource.data.assignedDriver == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name));
+
+      allow create: if isAdmin() && isValidId(deliveryId) && isValidDelivery(request.resource.data) && (
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time
+      );
+
+      allow update: if isSignedIn() && isValidId(deliveryId) && isValidDelivery(request.resource.data) && (
+        // Admin Master Access
+        (isAdmin() && request.resource.data.updatedAt == request.time) ||
+        
+        // Driver Access
+        (
+          isAssignedDriver(resource.data) &&
+          // Verify immutable business fields are unchanged
+          request.resource.data.invoiceNumber == resource.data.invoiceNumber &&
+          request.resource.data.volumes == resource.data.volumes &&
+          request.resource.data.clientName == resource.data.clientName &&
+          request.resource.data.address == resource.data.address &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.get('assignedDriver', null) == resource.data.get('assignedDriver', null) &&
+          request.resource.data.updatedAt == request.time &&
+          
+          // Limit driver modifications to occurrences, transit status coordinates and signature
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'updatedAt', 'completedAt', 'receiverName', 'photo', 'gpsLocation', 'occurrences'
+          ]) &&
+          
+          // Terminal State Locking: completed deliveries cannot be modified without Admin authority
+          (resource.data.status != 'ENTREGUE' || isAdmin())
+        )
+      );
+
+      allow delete: if isAdmin() && isValidId(deliveryId);
+    }
+  }
+}

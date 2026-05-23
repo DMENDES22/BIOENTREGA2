@@ -1,0 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Biomig Brasil Brand Theme */
+  --color-biomig-navy: #003045;
+  --color-biomig-lime: #98c30c;
+  --color-biomig-light: #f3f9e2;
+  --color-biomig-hover: #002232;
+  --color-biomig-lime-hover: #83aa0a;
+}
+
+/* Base style overrides to ensure nice anti-aliasing and native-looking body */
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
