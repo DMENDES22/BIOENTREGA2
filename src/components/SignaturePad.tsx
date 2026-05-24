@@ -67,22 +67,30 @@ export default function SignaturePad({ onSave, onClear }: SignaturePadProps) {
     const rect = canvas.getBoundingClientRect();
     
     // Check if Touch
-    if ('touches' in e || (e.nativeEvent && 'touches' in e.nativeEvent)) {
-      const touchEvent = 'touches' in e ? e : (e.nativeEvent as TouchEvent);
-      if (touchEvent.touches.length === 0) return { x: 0, y: 0 };
-      const touch = touchEvent.touches[0];
+    if ('touches' in e) {
+      if (e.touches.length === 0) return { x: 0, y: 0 };
+      const touch = e.touches[0];
       return {
         x: touch.clientX - rect.left,
         y: touch.clientY - rect.top
       };
-    } else {
-      // Mouse event
-      const mouseEvent = e as React.MouseEvent;
-      return {
-        x: mouseEvent.clientX - rect.left,
-        y: mouseEvent.clientY - rect.top
-      };
+    } else if ('nativeEvent' in e && e.nativeEvent && 'touches' in e.nativeEvent) {
+      const nativeTouch = (e.nativeEvent as any).touches;
+      if (nativeTouch && nativeTouch.length > 0) {
+        const touch = nativeTouch[0];
+        return {
+          x: touch.clientX - rect.left,
+          y: touch.clientY - rect.top
+        };
+      }
     }
+
+    // Mouse event
+    const mouseEvent = e as MouseEvent | React.MouseEvent;
+    return {
+      x: mouseEvent.clientX - rect.left,
+      y: mouseEvent.clientY - rect.top
+    };
   };
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {

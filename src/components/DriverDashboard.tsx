@@ -7,6 +7,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Delivery, DeliveryStatus, GPSLocation } from '../types';
 import SignaturePad from './SignaturePad';
+import GmailSyncCard from './GmailSyncCard';
 
 interface DriverDashboardProps {
   deliveries: Delivery[];
@@ -21,9 +22,32 @@ interface DriverDashboardProps {
     signature?: string
   ) => void;
   onLogout: () => void;
+  gmailToken: string | null;
+  gmailUserEmail: string | null;
+  onConnectGmail: () => void;
+  onDisconnectGmail: () => void;
+  onManualSyncGmail: () => void;
+  isSyncingGmail: boolean;
+  lastGmailSync: Date | null;
+  autoSync: boolean;
+  onToggleAutoSyncGmail: () => void;
 }
 
-export default function DriverDashboard({ deliveries, driverName, onUpdateStatus, onLogout }: DriverDashboardProps) {
+export default function DriverDashboard({ 
+  deliveries, 
+  driverName, 
+  onUpdateStatus, 
+  onLogout,
+  gmailToken,
+  gmailUserEmail,
+  onConnectGmail,
+  onDisconnectGmail,
+  onManualSyncGmail,
+  isSyncingGmail,
+  lastGmailSync,
+  autoSync,
+  onToggleAutoSyncGmail
+}: DriverDashboardProps) {
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [statusUpdateMode, setStatusUpdateMode] = useState<DeliveryStatus | null>(null);
   const [notes, setNotes] = useState('');
@@ -220,6 +244,21 @@ export default function DriverDashboard({ deliveries, driverName, onUpdateStatus
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Entregues hoje</p>
           <p className="mt-1 font-mono text-2xl font-black text-emerald-600">{completedCount}</p>
         </div>
+      </div>
+
+      {/* Gmail Syncer card widget for Driver */}
+      <div className="mb-6">
+        <GmailSyncCard
+          gmailToken={gmailToken}
+          gmailUserEmail={gmailUserEmail}
+          onConnect={onConnectGmail}
+          onDisconnect={onDisconnectGmail}
+          onManualSync={onManualSyncGmail}
+          isSyncing={isSyncingGmail}
+          lastSyncTime={lastGmailSync}
+          autoSync={autoSync}
+          onToggleAutoSync={onToggleAutoSyncGmail}
+        />
       </div>
 
       {/* Main Panel Area */}

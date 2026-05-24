@@ -3,14 +3,7 @@ import {
   Truck, Shield, User, Lock, ArrowRight, Activity, LogIn, Database, ChevronRight, UserPlus, Sparkles 
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  updateProfile 
-} from 'firebase/auth';
-import { auth, dbService } from '../firebase';
+import { authService, dbService, activeDBProvider } from '../firebase';
 
 interface LoginFormProps {
   onLogin: (email: string, role: 'ADMIN' | 'DRIVER', name: string) => void;
@@ -43,8 +36,7 @@ export default function LoginForm({ onLogin, drivers }: LoginFormProps) {
     setError('');
     setLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await authService.signInWithGoogle();
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
       setError('Erro ao fazer login com o Google: ' + (err.message || 'tente novamente.'));
@@ -64,9 +56,9 @@ export default function LoginForm({ onLogin, drivers }: LoginFormProps) {
         setError('Por favor, preencha o e-mail e a senha.');
         return;
       }
-      await signInWithEmailAndPassword(auth, cleanEmail, realPassword);
+      await authService.signInWithEmail(cleanEmail, realPassword);
     } catch (err: any) {
-      console.error('Firebase Email Login Error:', err);
+      console.error('Email Login Error:', err);
       setError('Erro ao autenticar: e-mail ou senha incorretos.');
     } finally {
       setLoading(false);
@@ -92,25 +84,22 @@ export default function LoginForm({ onLogin, drivers }: LoginFormProps) {
         return;
       }
 
-      // Create new Firebase Auth User
-      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, regPassword);
-      const user = userCredential.user;
-
-      // Update their display profile name
-      await updateProfile(user, { displayName: cleanName });
+      // Create new Auth User
+      const user = await authService.signUpWithEmail(cleanEmail, regPassword, cleanName);
+      const uid = user.uid;
 
       // Save user profile settings under user record
       const resolvedRole = cleanEmail === 'admin@bioentregas.com' ? 'ADMIN' : regRole;
       const profileData = {
-        uid: user.uid,
+        uid: uid,
         name: cleanName,
         email: cleanEmail,
         role: resolvedRole
       };
 
-      await dbService.saveUserProfile(user.uid, profileData);
+      await dbService.saveUserProfile(uid, profileData);
     } catch (err: any) {
-      console.error('Firebase Register Error:', err);
+      console.error('Register Error:', err);
       setError('Erro ao criar conta: ' + (err.message || 'verifique e tente novamente.'));
     } finally {
       setLoading(false);
@@ -181,7 +170,7 @@ export default function LoginForm({ onLogin, drivers }: LoginFormProps) {
             }`}
           >
             <Database className={`h-4 w-4 ${authTab === 'real' ? 'text-biomig-lime' : 'text-slate-400'}`} />
-            Nuvem Real (Firebase)
+            Nuvem Real ({activeDBProvider === 'supabase' ? 'Supabase' : 'Firebase'})
           </button>
           <button
             type="button"
@@ -213,7 +202,7 @@ export default function LoginForm({ onLogin, drivers }: LoginFormProps) {
               <div className="bg-emerald-50/50 border border-emerald-100/80 rounded-xl p-3 flex items-center gap-2.5">
                 <Sparkles className="h-4.5 w-4.5 text-biomig-lime shrink-0" />
                 <p className="text-[11px] text-emerald-800 font-semibold leading-normal">
-                  Seus dados salvos nesta área serão sincronizados em tempo real no banco do Firebase.
+                  Seus dados salvos nesta área serão sincronizados em tempo real no banco do {activeDBProvider === 'supabase' ? 'Supabase' : 'Firebase'}.
                 </p>
               </div>
 
@@ -257,7 +246,7 @@ export default function LoginForm({ onLogin, drivers }: LoginFormProps) {
                 <form onSubmit={handleRealEmailLogin} className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                      E-mail Real Firebase
+                      E-mail Real {activeDBProvider === 'supabase' ? 'Supabase' : 'Firebase'}
                     </label>
                     <div className="relative">
                       <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
@@ -298,7 +287,7 @@ export default function LoginForm({ onLogin, drivers }: LoginFormProps) {
                     disabled={loading}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-biomig-navy py-3 text-sm font-bold text-white transition-all hover:bg-biomig-hover active:scale-[0.98] shadow-md hover:shadow-lg hover:shadow-biomig-navy/25 cursor-pointer disabled:opacity-50"
                   >
-                    {loading ? 'Acessando...' : 'Acessar Conta Firebase'}
+                    {loading ? 'Acessando...' : `Acessar Conta ${activeDBProvider === 'supabase' ? 'Supabase' : 'Firebase'}`}
                     <ChevronRight className="h-4 w-4 text-biomig-lime" />
                   </button>
 

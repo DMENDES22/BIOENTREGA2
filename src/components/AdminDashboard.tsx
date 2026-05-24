@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Delivery, DeliveryStatus } from '../types';
+import GmailSyncCard from './GmailSyncCard';
 
 interface AdminDashboardProps {
   deliveries: Delivery[];
@@ -14,9 +15,33 @@ interface AdminDashboardProps {
   onLogout: () => void;
   adminName: string;
   drivers: { name: string; email: string }[];
+  gmailToken: string | null;
+  gmailUserEmail: string | null;
+  onConnectGmail: () => void;
+  onDisconnectGmail: () => void;
+  onManualSyncGmail: () => void;
+  isSyncingGmail: boolean;
+  lastGmailSync: Date | null;
+  autoSync: boolean;
+  onToggleAutoSyncGmail: () => void;
 }
 
-export default function AdminDashboard({ deliveries, onCreateDelivery, onLogout, adminName, drivers }: AdminDashboardProps) {
+export default function AdminDashboard({ 
+  deliveries, 
+  onCreateDelivery, 
+  onLogout, 
+  adminName, 
+  drivers,
+  gmailToken,
+  gmailUserEmail,
+  onConnectGmail,
+  onDisconnectGmail,
+  onManualSyncGmail,
+  isSyncingGmail,
+  lastGmailSync,
+  autoSync,
+  onToggleAutoSyncGmail
+}: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'create' | 'history'>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
@@ -195,7 +220,9 @@ export default function AdminDashboard({ deliveries, onCreateDelivery, onLogout,
 
       {/* Active Tab rendering */}
       {activeTab === 'dashboard' && (
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4 items-start" id="admin-main-grid">
+          {/* Main Board Col */}
+          <div className="space-y-6 lg:col-span-3">
           {/* Stats Bar */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -365,6 +392,22 @@ export default function AdminDashboard({ deliveries, onCreateDelivery, onLogout,
             )}
           </div>
         </div>
+
+        {/* Gmail Sync Card Sidebar Widget */}
+        <div className="lg:col-span-1">
+          <GmailSyncCard
+            gmailToken={gmailToken}
+            gmailUserEmail={gmailUserEmail}
+            onConnect={onConnectGmail}
+            onDisconnect={onDisconnectGmail}
+            onManualSync={onManualSyncGmail}
+            isSyncing={isSyncingGmail}
+            lastSyncTime={lastGmailSync}
+            autoSync={autoSync}
+            onToggleAutoSync={onToggleAutoSyncGmail}
+          />
+        </div>
+      </div>
       )}
 
       {activeTab === 'create' && (
